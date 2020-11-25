@@ -1,0 +1,11 @@
+*.tif
+*.TIF
+*.shp
+*.xml
+*.cpg
+*.tfw
+*.shx
+*.prj
+output/*
+input/*
+config/* 
