@@ -18,3 +18,16 @@ config/*
 52a7efeb0d3700a7fe197cbb3189185d/
 
 Data/Add/
+
+Data/
+
+Lit/
+
+Geemap/examples
+Geemap/exported
+Geemap/paper
+Geemap/src
+Geemap/tutorials
+Geemap/.ipynb_checkpoints
+Geemap/.log
+
