@@ -10,19 +10,12 @@ output/*
 input/*
 config/* 
 *.dbf
-
 .idea/
-
 06f16f8f15a75572d5cf0c1f9298e222/
-
 52a7efeb0d3700a7fe197cbb3189185d/
-
 Data/Add/
-
 Data/
-
 Lit/
-
 Geemap/examples
 Geemap/exported
 Geemap/paper
@@ -33,3 +26,5 @@ Geemap/.log
 
 
 Geemap/
+
+*.rar

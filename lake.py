@@ -33,6 +33,7 @@ class lake_extraction(object):
         self.lake_threshold = 0
         self.export_files = False
         self.current_srs = None
+        self.current_crs = None
         self.current_prj = None
         self.current_raster = None
         self.current_shape_folder = None
@@ -112,6 +113,7 @@ class lake_extraction(object):
             raster_file = gdal.Open(file_)
             self.current_srs = raster_file.GetGeoTransform()
             self.current_prj = raster_file.GetProjection()
+            self.current_crs = raster_file.GetSpatialRef()
             self.current_raster = raster_file
 
             raster_data = raster_file.GetRasterBand(1).ReadAsArray().astype(np.float32)
@@ -121,12 +123,10 @@ class lake_extraction(object):
         except BaseException as be:
             print(be)
 
-
-
     def convert(self, in_file, out_file):
         omit = ['SHAPE_AREA', 'SHAPE_LEN']
-        f_in = os.path.join(self.process_path, self.output_folder, self.current_shape_folder, in_file + ".shp")
-        f_out = os.path.join(self.process_path, self.output_folder, self.current_shape_folder, out_file + ".json")
+        f_in = os.path.join(self.process_path, self.output_folder, in_file + ".shp")
+        f_out = os.path.join(self.process_path, self.output_folder, out_file + ".json")
         with fiona.open(f_in) as source:
             # Use the recipe from the Shapely documentation:
             # http://toblerity.org/shapely/manual.html
@@ -174,31 +174,27 @@ class lake_extraction(object):
 
     def convert_to_polygon(self, raster, polygon_file_name="lake"):
 
-        self.current_shape_folder = polygon_file_name
-        shp_schema = {
-            'geometry': 'MultiPolygon',
-            'properties': {'pixelvalue': 'int'}
-        }
-        with rasterio.open(os.path.join(self.process_path, self.output_folder, raster + ".tif")) as src:
-            crs = src.crs
-            src_band = src.read(1)
-            # Keep track of unique pixel values in the input band
-            unique_values = np.unique(src_band)
-            # Polygonize with Rasterio. `shapes()` returns an iterable
-            # of (geom, value) as tuples
-            shapes = list(rasterio.features.shapes(src_band, transform=src.transform))
-            with fiona.open(os.path.join(self.process_path, self.output_folder, polygon_file_name),
-                            'w',
-                            'ESRI Shapefile',
-                            shp_schema,
-                            crs) as shp:
-                for pixel_value in unique_values:
-                    polygons = [shape(geom) for geom, value in shapes if value == pixel_value]
-                    multipolygon = MultiPolygon(polygons)
-                    shp.write({
-                        'geometry': mapping(multipolygon),
-                        'properties': {'pixelvalue': int(pixel_value)}
-                    })
+        from osgeo import ogr, osr
+        testSR = osr.SpatialReference()
+        testSR.ImportFromWkt(self.current_crs.ExportToWkt())
+
+        sourceRaster = gdal.Open(os.path.join(self.process_path, self.output_folder, raster + ".tif"))
+        band = sourceRaster.GetRasterBand(1)
+        bandArray = band.ReadAsArray()
+        outShapefile = polygon_file_name
+        driver = ogr.GetDriverByName("ESRI Shapefile")
+        output_file = os.path.join(self.process_path, self.output_folder, outShapefile + ".shp")
+        if os.path.exists(output_file):
+            driver.DeleteDataSource(output_file)
+        outDatasource = driver.CreateDataSource(output_file)
+        outLayer = outDatasource.CreateLayer(str(outShapefile), srs=testSR)
+        raster_value_field = ogr.FieldDefn('rasterVal', ogr.OFTInteger)
+        outLayer.CreateField(raster_value_field)
+        gdal.Polygonize(band, None, outLayer, 0, [], callback=None)
+        outDatasource.Destroy()
+        sourceRaster = None
+
+
 
     def run(self):
         print("Process has been started at {} ".format(self.start_time))
@@ -228,8 +224,11 @@ class lake_extraction(object):
         lakes = (ndvi < 0) & (mndwi > 500) & (ndbi < 0)
         self.export_index_to_raster(lakes, "lakes")
 
-# if __name__ == '__main__':
-#     lake_extraction_object = lake_extraction()
-#     lake_extraction_object.export.run()
-#     lake_extraction_object.end_time = datetime.datetime.now()
-#     print("Process time:  {}".format(str(lake_extraction_object.end_time - lake_extraction_object.start_time)))
+if __name__ == '__main__':
+    os.environ['GDAL_DATA'] = r'/usr/share/gdal'
+    lake_extraction_object = lake_extraction()
+    lake_extraction_object.export.run()
+    lake_extraction_object.end_time = datetime.datetime.now()
+    lake_extraction_object.convert_to_polygon("lakes", "lake_in_polygon_3")
+    lake_extraction_object.convert("lake_in_polygon", "lake_in_geojson")
+    print("Process time:  {}".format(str(lake_extraction_object.end_time - lake_extraction_object.start_time)))
