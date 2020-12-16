@@ -28,3 +28,10 @@ Geemap/.log
 Geemap/
 
 *.rar
+venv/bin/
+
+venv/lib/python3.8/site-packages/__pycache__/
+
+venv/lib/python3.8/site-packages/
+
+venv/
