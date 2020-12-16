@@ -6,6 +6,7 @@ CLIENT_ID = '9f7a0f53-d397-46ec-bc2c-7d109acc1dce'
 CLIENT_SECRET = 'J<2/_MJx9G,wf5n+U6q,mls[hga>nK-LTHjRi!p/'
 
 config = SHConfig()
+
 config.instance_id = 'ebb43985-6aca-476b-9719-fce4e7a54d60'
 
 import datetime
