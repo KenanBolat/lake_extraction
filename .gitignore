@@ -28,3 +28,12 @@ Geemap/.log
 Geemap/
 
 *.rar
+venv/bin/__pycache__/
+
+venv/bin/
+
+venv/
+
+Lake_cak-home_Dec-18-072730-2020_Conflict.qgz
+
+test_cak-home_Dec-18-072730-2020_Conflict.py
