@@ -121,7 +121,7 @@ request_true_color = SentinelHubRequest(
 data_with_cloud_mask = request_true_color.get_data()
 plot_image(data_with_cloud_mask[0], factor=1/255)
 
-EVALSCRIPT_PATH = os.path.join('.','eval.js')
+EVALSCRIPT_PATH = os.path.join('..', 'eval.js')
 
 with open(EVALSCRIPT_PATH, 'r') as fp:
     evalscript = fp.read()
