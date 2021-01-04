@@ -1,0 +1,20 @@
+"merged2_ww@1" < 1.92 AND "merged2_ww@2" < 0.90 AND "merged2_ww@2" > 0.55 AND "merged2_ww@3" < -0.48 AND "merged2_ww@3" > -0.72
+
+"merged2_ww@1" < 1.92 AND "merged2_ww@2" < 0.93 AND "merged2_ww@2" > 0.55 AND "merged2_ww@3" < -0.29 AND "merged2_ww@3" > -0.77
+
+"merged2_ww@1" < 1.92 AND "merged2_ww@2" < 0.93 AND "merged2_ww@2" > 0.55 AND "merged2_ww@3" < -0.29 AND "merged2_ww@3" > -0.77  OR ("merged2_ww@1" = 0.0 AND "merged2_ww@2" = 0.0 AND "merged2_ww@3" = 0.0)
+
+
+("merged2_ww@1" < 1.92 AND "merged2_ww@1" > 0) - ("merged2_ww@1" < 1.92 AND "merged2_ww@2" < 0.93 AND "merged2_ww@2" > 0.55 AND "merged2_ww@3" < -0.29 AND "merged2_ww@3" > -0.77  OR ("merged2_ww@1" = 0.0 AND "merged2_ww@2" = 0.0 AND "merged2_ww@3" = 0.0))
+
+
+"merged@1" < 1.92 AND "merged@2" < 0.93 AND "merged@2" > 0.55 AND "merged@3" < -0.29 AND "merged@3" > -0.77
+
+
+UnboundLocalError: local variable 'idj' referenced before assignment
+    return idj-idx
+Line 19 in lengthOfLongestSubstring (Solution.py)
+    ret = Solution().lengthOfLongestSubstring(param_1)
+Line 38 in _driver (Solution.py)
+    _driver()
+Line 49 in <module> (Solution.py)

@@ -54,3 +54,9 @@ test_cak-home_Dec-18-072730-2020_Conflict.py
 Geemap/WBT
 
 Geemap/prj_earthengine_hydroshare
+
+*.qgz
+*.tar.gz
+*.tar
+*.zip
+*Conflict*
