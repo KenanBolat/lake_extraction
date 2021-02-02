@@ -50,6 +50,10 @@ class lake_extraction(object):
             return False
         return True
 
+
+    def print_duration(self):
+        return print(self.end - self.start)
+
     def traverse_data(self, pattern="RT_*.TIF"):
         files = []
         if self.check_folder(self.input_folder):
@@ -79,7 +83,7 @@ class lake_extraction(object):
         # For Landsat 7 NDWI =  (Band 4 – Band 5) / (Band 4 + Band 5)
         # For Landsat 8 NDWI =  (Band 5 – Band 6) / (Band 5 + Band 6)
 
-        numerator = (band_nir - band_swir)
+        numerator = (band_nir - band_swir ** 3 )
         denominator = (band_nir + band_swir)
         return (numerator / denominator) * self.scale_factor
 
