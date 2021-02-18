@@ -10,15 +10,12 @@ import pandas as pd
 import sys
 
 
-
-
-
 class sentinel1_lake_extraction(object):
 
     def __init__(self):
-        self.process_path     = r"/home/baris/Desktop/CE-STAR/Python_calisma_folder/Input/"
+        self.process_path = r"/home/baris/Desktop/CE-STAR/Python_calisma_folder/Input/"
         self.lake_coordinates = r"/home/baris/Desktop/CE-STAR/Python_calisma_folder/WellKnownText/"
-        self.output_folder    = r"/home/baris/Desktop/CE-STAR/Python_calisma_folder/Output/"
+        self.output_folder = r"/home/baris/Desktop/CE-STAR/Python_calisma_folder/Output/"
         self.start_time = datetime.datetime.now()
         self.end_time = None
         self.output_type = None
@@ -35,15 +32,11 @@ class sentinel1_lake_extraction(object):
 
         return True
 
-
-
     def traverse_data(self):
-        files_found =   sorted(list(glob.iglob(os.path.join(self.process_path,'**', '*S1*.zip'), recursive=True)))
+        files_found = sorted(list(glob.iglob(os.path.join(self.process_path, '**', '*S1*.zip'), recursive=True)))
 
         self.temporary_data = files_found
         print('Images are found')
-
-
 
     def read_data(self):
         name, sensing_mode, product_type, polarization, height, width, band_names = ([] for i in range(7))
@@ -64,59 +57,63 @@ class sentinel1_lake_extraction(object):
         df_s1_read = pd.DataFrame(
             {'Name': name, 'Sensing Mode': sensing_mode, 'Product Type': product_type, 'Polarization': polarization,
              'Height': height, 'Width': width, 'Band Names': band_names})
-        df_s1_read.to_excel("Images metadata.xlsx",sheet_name='Sentinel1')
+        df_s1_read.to_excel("Images metadata.xlsx", sheet_name='Sentinel1')
         print(df_s1_read)
         self.product_name = df_s1_read['Name'].values.tolist()
-        self.temporary_data = s1_products
+        self.temporary_data_list = s1_read_list
         print('Data read is done!')
 
-
-
-
     def geo_subset(self):
-        lake_coordinates = os.path.join(self.lake_coordinates,'uyuz')
+        subset_list=[]
+        lake_coordinates = os.path.join(self.lake_coordinates, 'mogan')
         data = open(lake_coordinates)
-        data_string = data.read().replace("\n"," ")
+        data_string = data.read().replace("\n", " ")
         data.close()
 
-        #snappy part
-        parameters = snappy.HashMap()
-        parameters.put('copyMetadata', True)
-        parameters.put('geoRegion', data_string)
-        subset = snappy.GPF.createProduct("Subset", parameters, self.temporary_data )
-        list(subset.getBandNames())
-        self.temporary_data = subset
+        # snappy part
+        for product in self.temporary_data_list:
+            parameters = snappy.HashMap()
+            parameters.put('copyMetadata', True)
+            parameters.put('geoRegion', data_string)
+            subset = snappy.GPF.createProduct("Subset", parameters, product)
+            subset_list.append(subset)
+            list(subset.getBandNames())
+        self.temporary_data_list = subset_list
         print('Subsetting is done!')
 
-
     def thermal_noise_removel(self):
-        parameters = snappy.HashMap()
-        parameters.put('removeThermalNoise', True)
-        thermal_noise = snappy.GPF.createProduct("ThermalNoiseRemoval", parameters,self.temporary_data)
-        self.temporary_data = thermal_noise
+        thermal_noise_list = []
+        for product in self.temporary_data_list:
+            parameters = snappy.HashMap()
+            parameters.put('removeThermalNoise', True)
+            thermal_noise = snappy.GPF.createProduct("ThermalNoiseRemoval", parameters, product)
+            thermal_noise_list.append(thermal_noise)
+        self.temporary_data_list = thermal_noise_list
         print('Thermal noise removel is done!')
 
-
     def calibration(self):
-        parameters = snappy.HashMap()
-        parameters.put('outputSigmaBand', True)
-        parameters.put('selectedPolarizations', 'VH,VV' )
-        parameters.put('outputImageScaleInDb', True)
-        calibrated = snappy.GPF.createProduct("Calibration", parameters, self.temporary_data)
+        calibrated_list=[]
+        for product in self.temporary_data_list:
+            parameters = snappy.HashMap()
+            parameters.put('outputSigmaBand', True)
+            parameters.put('selectedPolarizations', 'VH,VV')
+            parameters.put('outputImageScaleInDb', True)
+            calibrated = snappy.GPF.createProduct("Calibration", parameters, product)
+            calibrated_list.append(calibrated)
         print('Calibration is done!')
-        self.temporary_data = calibrated
+        self.temporary_data_list = calibrated_list
 
     def speckle_filter(self):
-        parameters = snappy.HashMap()
-        parameters.put('filter', 'Lee')
-        speckle_filtered = snappy.GPF.createProduct('Speckle-Filter',parameters,self.temporary_data)
-        self.temporary_data= speckle_filtered
+        speckle_filtered_list = []
+        for product in self.temporary_data_list:
+            parameters = snappy.HashMap()
+            parameters.put('filter', 'Lee')
+            speckle_filtered = snappy.GPF.createProduct('Speckle-Filter', parameters, product)
+            speckle_filtered_list.append(speckle_filtered)
+        self.temporary_data_list = speckle_filtered_list
         print('Speckle filtering is done!')
 
-
-
     def terrain_correction(self):
-
         proj_wgs84 = '''GEOGCS["WGS 84",
     DATUM["WGS_1984",
         SPHEROID["WGS 84",6378137,298.257223563,
@@ -172,26 +169,30 @@ class sentinel1_lake_extraction(object):
     AXIS["Northing",NORTH],
     AUTHORITY["EPSG","32635"]]'''
 
+        terrain_corrected_list = []
+        for product in self.temporary_data_list:
+            parameters = snappy.HashMap()
+            parameters.put('demName', 'SRTM 1Sec HGT')
+            parameters.put('imgResamplingMethod', 'BILINEAR_INTERPOLATION')
+            parameters.put('pixelSpacingInMeter', 10.0)
+            parameters.put('mapProjection', proj_wgs84_36n)
+            parameters.put('nodataValueAtSea', False)
+            parameters.put('saveSelectedSourceBand', True)
+            terrain_corrected = snappy.GPF.createProduct('Terrain-Correction', parameters, product)
+            terrain_corrected_list.append(terrain_corrected)
 
-        parameters = snappy.HashMap()
-        parameters.put('demName', 'SRTM 1Sec HGT')
-        parameters.put('imgResamplingMethod', 'BILINEAR_INTERPOLATION')
-        parameters.put('pixelSpacingInMeter',10.0)
-        parameters.put('mapProjection', proj_wgs84_36n)
-        parameters.put('nodataValueAtSea', False)
-        parameters.put('saveSelectedSourceBand', True)
-        terrain_corrected = snappy.GPF.createProduct('Terrain-Correction',parameters,self.temporary_data)
         print('Terrain correction is done!')
-        self.temporary_data = terrain_corrected
+        self.temporary_data_list = terrain_corrected_list
 
     def write_product(self):
-        string = (self.temporary_data).getName()
+        self.temporary_raster_list =[]
+        for product in self.temporary_data_list:
+            string = (product).getName()
+            output_name = os.path.join(self.output_folder, string)
+            self.temporary_data = snappy.ProductIO.writeProduct(product, output_name, 'BEAM-DIMAP')
+            self.temporary_raster_list.append(output_name + ".tif")
 
-        output_name = os.path.join(self.output_folder,string)
-        self.temporary_data = snappy.ProductIO.writeProduct(self.temporary_data, output_name, 'BEAM-DIMAP')
-        self.temporary_raster = output_name + ".tif"
         print('Writing is done!')
-
 
     def calculate_composite(self):
 
@@ -209,38 +210,39 @@ class sentinel1_lake_extraction(object):
         self.temporary_raster_vv = raster_data_vv
         self.temporary_raster_vh = raster_data_vh
 
-
     def calculate_threshold(self):
-#         raster_vv = self.temporary_raster_vv
-#         raster_vh = self.temporary_raster_vh
-#         start_time = datetime.datetime.now()
-#         hist, bin_edges = np.histogram(raster_vv, bins=512)
-#         if is_normalized:            9
-#             hist = np.divide(hist.ravel(), hist.max())
-#
-#         bin_mids = (bin_edges[:-1] + bin_edges[1:]) / 2.
-#
-# # show_hist(raster_vv,bins=512,lw=0.0, stacked=False, alpha=1, histtype='stepfilled', title="VV_dB Histogram")
-#         # show_hist(raster_vh, bins=512, lw=0.0, stacked=False, alpha=1, histtype='stepfilled', title="VH_dB Histogram")
-#
-#         end_time = datetime.datetime.now()
-#         print(end_time-start_time,' second to generate histogram')
+        #         raster_vv = self.temporary_raster_vv
+        #         raster_vh = self.temporary_raster_vh
+        #         start_time = datetime.datetime.now()
+        #         hist, bin_edges = np.histogram(raster_vv, bins=512)
+        #         if is_normalized:            9
+        #             hist = np.divide(hist.ravel(), hist.max())
+        #
+        #         bin_mids = (bin_edges[:-1] + bin_edges[1:]) / 2.
+        #
+        # # show_hist(raster_vv,bins=512,lw=0.0, stacked=False, alpha=1, histtype='stepfilled', title="VV_dB Histogram")
+        #         # show_hist(raster_vh, bins=512, lw=0.0, stacked=False, alpha=1, histtype='stepfilled', title="VH_dB Histogram")
+        #
+        #         end_time = datetime.datetime.now()
+        #         print(end_time-start_time,' second to generate histogram')
         pass
 
-
-    def threshold_to_raster(self):
+    def binarization_with_threshold(self):
         pass
 
     def convert_to_polygon(self):
         pass
 
-
     def linear_to_dB(self):
-        parameters = snappy.HashMap()
-        parameters.put('sourceBands', 'Sigma0_VH,Sigma0_VV')
-        decibel = GPF.createProduct("LinearToFromdB", parameters, self.temporary_data)
+        decibel_list = []
+        for product in self.temporary_data_list:
+            parameters = snappy.HashMap()
+            parameters.put('sourceBands', 'Sigma0_VH,Sigma0_VV')
+            decibel = GPF.createProduct("LinearToFromdB", parameters, product)
+            decibel_list.append(decibel)
+        self.temporary_data_list=decibel_list
         print("Linear to/from dB Conversion is done")
-        self.temporary_data=decibel
+
 
     def run(self):
 
@@ -253,8 +255,6 @@ class sentinel1_lake_extraction(object):
         self.linear_to_dB()
         self.geo_subset()
         self.write_product()
-
-
 
     @property
     def as_int(self):
@@ -272,11 +272,13 @@ class sentinel1_lake_extraction(object):
         return self
 
 
-
 if __name__ == '__main__':
     sentinel1_lake_extraction_object = sentinel1_lake_extraction()
     sentinel1_lake_extraction_object.run()
     sentinel1_lake_extraction_object.end_time = datetime.datetime.now()
-    # lake_extraction_object.convert_to_polygon("lakes", "lake_in_polygon_3")
+    # sentinel1_lake_extraction_object.calculate_threshold()
+    # sentinel1_lake_extraction_object.binarization_with_threshold()
+    # sentinel1_lake_extraction_object.convert_to_polygon()
+    # sentinel1_lake_extraction_object
     # lake_extraction_object.convert("lake_in_polygon", "lake_in_geojson")
     print("Process time:  {}".format(str(sentinel1_lake_extraction_object.end_time - sentinel1_lake_extraction_object.start_time)))
