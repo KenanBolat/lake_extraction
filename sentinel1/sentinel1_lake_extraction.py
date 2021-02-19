@@ -4,10 +4,9 @@ import numpy as np
 from osgeo import gdal
 import os
 import glob
-import gc
 import datetime
 import pandas as pd
-import sys
+import matplotlib.pyplot as plt
 
 
 class sentinel1_lake_extraction(object):
@@ -16,6 +15,8 @@ class sentinel1_lake_extraction(object):
         self.process_path = r"/home/baris/Desktop/CE-STAR/Python_calisma_folder/Input/"
         self.lake_coordinates = r"/home/baris/Desktop/CE-STAR/Python_calisma_folder/WellKnownText/"
         self.output_folder = r"/home/baris/Desktop/CE-STAR/Python_calisma_folder/Output/"
+        self.binary_output_folder = r"/home/baris/Desktop/CE-STAR/Python_calisma_folder/Output/Binary/"
+        self.polygon_folder = r"/home/baris/Desktop/CE-STAR/Python_calisma_folder/Output/Shapefile/"
         self.start_time = datetime.datetime.now()
         self.end_time = None
         self.output_type = None
@@ -194,68 +195,123 @@ class sentinel1_lake_extraction(object):
 
         print('Writing is done!')
 
+    def write_tiff(self):
+        self.temporary_raster_list = []
+        for product in self.temporary_data_list:
+            string = (product).getName()
+            output_name = os.path.join(self.binary_output_folder, string)
+            self.temporary_data = snappy.ProductIO.writeProduct(product, output_name, 'GeoTIFF')
+            self.temporary_raster_list.append(output_name + ".tif")
+
+        print('Writing is done!')
+
+
     def calculate_composite(self):
 
         pass
 
     def read_raster(self):
+        self.current_crs_list = []
+        self.current_raster_list = []
+        for product in self.temporary_raster_list:
+            raster_file = gdal.Open(product)
+            self.current_srs = raster_file.GetGeoTransform()
+            self.current_prj = raster_file.GetProjection()
+            self.current_crs_list.append(raster_file.GetSpatialRef())
+            self.current_raster_list.append(raster_file)
+            raster_data = raster_file.GetRasterBand(1).ReadAsArray().astype(np.float32)
+            self.current_raster_list.append(raster_data)
 
-        raster_file = gdal.Open(self.temporary_raster)
-        self.current_srs = raster_file.GetGeoTransform()
-        self.current_prj = raster_file.GetProjection()
-        self.current_crs = raster_file.GetSpatialRef()
-        self.current_raster = raster_file
-        raster_data_vv = raster_file.GetRasterBand(2).ReadAsArray().astype(np.float32)
-        raster_data_vh = raster_file.GetRasterBand(1).ReadAsArray().astype(np.float32)
-        self.temporary_raster_vv = raster_data_vv
-        self.temporary_raster_vh = raster_data_vh
+        self.temporary_raster_list = self.current_raster_list
 
-    def calculate_threshold(self):
-        #         raster_vv = self.temporary_raster_vv
-        #         raster_vh = self.temporary_raster_vh
-        #         start_time = datetime.datetime.now()
-        #         hist, bin_edges = np.histogram(raster_vv, bins=512)
-        #         if is_normalized:            9
-        #             hist = np.divide(hist.ravel(), hist.max())
-        #
-        #         bin_mids = (bin_edges[:-1] + bin_edges[1:]) / 2.
-        #
-        # # show_hist(raster_vv,bins=512,lw=0.0, stacked=False, alpha=1, histtype='stepfilled', title="VV_dB Histogram")
-        #         # show_hist(raster_vh, bins=512, lw=0.0, stacked=False, alpha=1, histtype='stepfilled', title="VH_dB Histogram")
-        #
-        #         end_time = datetime.datetime.now()
-        #         print(end_time-start_time,' second to generate histogram')
-        pass
+    def calculate_threshold_from_tiff(self):
 
-    def binarization_with_threshold(self):
-        pass
+        for raster in self.temporary_raster_vv_list:
+            raster_vv = raster
+            start_time = datetime.datetime.now()
+            plt.hist(raster_vv,range=(raster_vv.min()+2, raster_vv.max()-4), bins=20 )
+            # show_hist(raster_vv,bins=512,lw=0.0, stacked=False, alpha=1, histtype='stepfilled', title="VV_dB Histogram")
+            # show_hist(raster_vh, bins=512, lw=0.0, stacked=False, alpha=1, histtype='stepfilled', title="VH_dB Histogram")
+            end_time = datetime.datetime.now()
+            print(end_time-start_time,' second to generate histogram')
+        plt.show()
+
+    def apply_threshold_to_product(self):
+        self.temporary_data_binary = []
+        snappy.GPF.getDefaultInstance().getOperatorSpiRegistry().loadOperatorSpis()
+        BandDescriptor = jpy.get_type('org.esa.snap.core.gpf.common.BandMathsOp$BandDescriptor')
+        targetBand = BandDescriptor()
+        targetBand.name = 'band1'
+        targetBand.type = 'float32'
+        targetBand.expression = 'Sigma0_VV_db < -20 '
+        targetBands = jpy.array('org.esa.snap.core.gpf.common.BandMathsOp$BandDescriptor', 1)
+        targetBands[0] = targetBand
+
+        for product in self.decibel_list:
+            parameters = snappy.HashMap()
+            parameters.put('name', 'Sigma0_VV_db_Threshold')
+            parameters.put('targetBands', targetBands)
+            binary = snappy.GPF.createProduct('BandMaths', parameters, product)
+            self.temporary_data_binary.append(binary)
+
+        self.temporary_data_list = self.temporary_data_binary
+
+
+
 
     def convert_to_polygon(self):
-        pass
+        from osgeo import ogr, osr
+        testSR = osr.SpatialReference()
+        for current_crs in self.current_crs_list:
+            testSR.ImportFromWkt(current_crs.ExportToWkt())
+        binary_images = sorted(list(glob.iglob(os.path.join(self.binary_output_folder,'**', '*.tif'), recursive=True)))
+        for product in binary_images:
+            sourceRaster = gdal.Open(product)
+            band = sourceRaster.GetRasterBand(1)
+            bandArray = band.ReadAsArray()
+            outShapefile = os.path.join(os.path.basename(str(product)))
+            driver = ogr.GetDriverByName("ESRI Shapefile")
+            output_file = os.path.join(self.polygon_folder,outShapefile+".shp")
+            if os.path.exists(output_file):
+                driver.DeleteDataSource(output_file)
+            outDatasource = driver.CreateDataSource(output_file)
+            outLayer = outDatasource.CreateLayer(str(outShapefile), srs = testSR)
+            raster_value_field = ogr.FieldDefn('rasterVal', ogr.OFTInteger)
+            outLayer.CreateField(raster_value_field)
+            gdal.Polygonize(band,None,outLayer,0,[],callback=None)
+            outDatasource.Destroy()
+            sourceRaster=None
+
 
     def linear_to_dB(self):
-        decibel_list = []
+        self.decibel_list = []
         for product in self.temporary_data_list:
             parameters = snappy.HashMap()
             parameters.put('sourceBands', 'Sigma0_VH,Sigma0_VV')
             decibel = GPF.createProduct("LinearToFromdB", parameters, product)
-            decibel_list.append(decibel)
-        self.temporary_data_list=decibel_list
+            self.decibel_list.append(decibel)
+        self.temporary_data_list=self.decibel_list
         print("Linear to/from dB Conversion is done")
 
 
-    def run(self):
+    def run_to_writing(self):
 
         self.traverse_data()
         self.read_data()
+        self.terrain_correction()
+        self.geo_subset()
         self.thermal_noise_removel()
         self.calibration()
         self.speckle_filter()
-        self.terrain_correction()
         self.linear_to_dB()
-        self.geo_subset()
         self.write_product()
+        print('Post processes of SAR Images is done!')
 
+    def run_to_binarization_with_product(self):
+        self.apply_threshold_to_product()
+        self.write_tiff()
+        self.read_raster()
+        self.convert_to_polygon()
     @property
     def as_int(self):
         self.output_type = "int"
@@ -274,11 +330,9 @@ class sentinel1_lake_extraction(object):
 
 if __name__ == '__main__':
     sentinel1_lake_extraction_object = sentinel1_lake_extraction()
-    sentinel1_lake_extraction_object.run()
+    sentinel1_lake_extraction_object.run_to_writing()
+    sentinel1_lake_extraction_object.run_to_binarization_with_product()
     sentinel1_lake_extraction_object.end_time = datetime.datetime.now()
-    # sentinel1_lake_extraction_object.calculate_threshold()
-    # sentinel1_lake_extraction_object.binarization_with_threshold()
-    # sentinel1_lake_extraction_object.convert_to_polygon()
     # sentinel1_lake_extraction_object
     # lake_extraction_object.convert("lake_in_polygon", "lake_in_geojson")
     print("Process time:  {}".format(str(sentinel1_lake_extraction_object.end_time - sentinel1_lake_extraction_object.start_time)))
