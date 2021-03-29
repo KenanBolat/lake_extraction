@@ -12,11 +12,11 @@ import matplotlib.pyplot as plt
 class sentinel1_lake_extraction(object):
 
     def __init__(self):
-        self.process_path = r"/home/baris/PycharmProjects/sentinel1/Input/"
-        self.lake_coordinates = r"/home/baris/PycharmProjects/sentinel1/WellKnownText/"
-        self.output_folder = r"/home/baris/PycharmProjects/sentinel1/Output/"
-        self.binary_output_folder = r"/home/baris/PycharmProjects/sentinel1/Output/Binary/"
-        self.polygon_folder = r"/home/baris/PycharmProjects/sentinel1/Output/Shapefile/"
+        self.process_path = r"/home/baris/Desktop/CE-STAR/Python_calisma_folder/Input/"
+        self.lake_coordinates = r"/home/baris/Desktop/CE-STAR/Python_calisma_folder/WellKnownText/"
+        self.output_folder = r"/home/baris/Desktop/CE-STAR/Python_calisma_folder/Output/"
+        self.binary_output_folder = r"/home/baris/Desktop/CE-STAR/Python_calisma_folder/Output/Binary/"
+        self.polygon_folder = r"/home/baris/Desktop/CE-STAR/Python_calisma_folder/Output/Shapefile/"
         self.start_time = datetime.datetime.now()
         self.end_time = None
         self.output_type = None
@@ -45,22 +45,22 @@ class sentinel1_lake_extraction(object):
         name, sensing_mode, product_type, polarization, height, width, band_names = ([] for i in range(7))
         s1_read_list = []
 
-        for i in self.temporary_data:
-            sensing_mode.append(i.split("_")[3])
-            product_type.append(i.split("_")[4])
-            polarization.append(i.split("_")[-6])
-            # reading products with snappy library
-            s1_products = snappy.ProductIO.readProduct(i)
-            name.append(s1_products.getName())
-            height.append(s1_products.getSceneRasterHeight())
-            width.append(s1_products.getSceneRasterWidth())
-            band_names.append(s1_products.getBandNames())
-            s1_read_list.append(s1_products)
+
+        sensing_mode.append(self.temporary_data.split("_")[3])
+        product_type.append(self.temporary_data.split("_")[4])
+        polarization.append(self.temporary_data.split("_")[-6])
+        # reading products with snappy library
+        s1_products = snappy.ProductIO.readProduct(self.temporary_data)
+        name.append(s1_products.getName())
+        height.append(s1_products.getSceneRasterHeight())
+        width.append(s1_products.getSceneRasterWidth())
+        band_names.append(s1_products.getBandNames())
+        s1_read_list.append(s1_products)
 
         df_s1_read = pd.DataFrame(
             {'Name': name, 'Sensing Mode': sensing_mode, 'Product Type': product_type, 'Polarization': polarization,
              'Height': height, 'Width': width, 'Band Names': band_names})
-        df_s1_read.to_excel("Images metadata.xlsx", sheet_name='Sentinel1')
+        #df_s1_read.to_excel("Images metadata.xlsx", sheet_name='Sentinel1')
         print(df_s1_read)
         self.product_name = df_s1_read['Name'].values.tolist()
         self.temporary_data_list = s1_read_list
@@ -69,7 +69,7 @@ class sentinel1_lake_extraction(object):
 
     def geo_subset(self):
         subset_list=[]
-        lake_coordinates = os.path.join(self.lake_coordinates, 'uyuz')
+        lake_coordinates = os.path.join(self.lake_coordinates, 'aktas')
         data = open(lake_coordinates)
         data_string = data.read().replace("\n", " ")
         data.close()
@@ -190,13 +190,37 @@ class sentinel1_lake_extraction(object):
     AXIS["Northing",NORTH],
     AUTHORITY["EPSG","32635"]]'''
 
+
+        proj_wgs84_32n = '''PROJCS["WGS 84 / UTM zone 32N",
+        GEOGCS["WGS 84",
+            DATUM["WGS_1984",
+                SPHEROID["WGS 84",6378137,298.257223563,
+                    AUTHORITY["EPSG","7030"]],
+                AUTHORITY["EPSG","6326"]],
+            PRIMEM["Greenwich",0,
+                AUTHORITY["EPSG","8901"]],
+            UNIT["degree",0.01745329251994328,
+                AUTHORITY["EPSG","9122"]],
+            AUTHORITY["EPSG","4326"]],
+        UNIT["metre",1,
+            AUTHORITY["EPSG","9001"]],
+        PROJECTION["Transverse_Mercator"],
+        PARAMETER["latitude_of_origin",0],
+        PARAMETER["central_meridian",9],
+        PARAMETER["scale_factor",0.9996],
+        PARAMETER["false_easting",500000],
+        PARAMETER["false_northing",0],
+        AUTHORITY["EPSG","32632"],
+        AXIS["Easting",EAST],
+        AXIS["Northing",NORTH]]'''
+
         terrain_corrected_list = []
         for product in self.temporary_data_list:
             parameters = snappy.HashMap()
             parameters.put('demName', 'SRTM 1Sec HGT')
             parameters.put('imgResamplingMethod', 'BILINEAR_INTERPOLATION')
             parameters.put('pixelSpacingInMeter', 10.0)
-            parameters.put('mapProjection', proj_wgs84_36n)
+            parameters.put('mapProjection', proj_wgs84_35n)
             parameters.put('nodataValueAtSea', False)
             parameters.put('saveSelectedSourceBand', True)
             terrain_corrected = snappy.GPF.createProduct('Terrain-Correction', parameters, product)
@@ -243,7 +267,11 @@ class sentinel1_lake_extraction(object):
             raster_data = raster_file.GetRasterBand(1).ReadAsArray().astype(np.float32)
             self.current_raster_list.append(raster_data)
 
+
+
         self.temporary_raster_list = self.current_raster_list
+        raster_data = None
+
 
     def calculate_threshold_from_tiff(self):
 
@@ -264,7 +292,7 @@ class sentinel1_lake_extraction(object):
         targetBand = BandDescriptor()
         targetBand.name = 'band1'
         targetBand.type = 'float32'
-        targetBand.expression = 'Sigma0_VV_db < -16 '
+        targetBand.expression = 'Sigma0_VV_db < -16.5 '
         targetBands = jpy.array('org.esa.snap.core.gpf.common.BandMathsOp$BandDescriptor', 1)
         targetBands[0] = targetBand
 
@@ -279,7 +307,16 @@ class sentinel1_lake_extraction(object):
         return self.temporary_data_binary
 
 
-
+    def linear_to_dB(self):
+        self.decibel_list = []
+        for product in self.temporary_data_list:
+            parameters = snappy.HashMap()
+            parameters.put('sourceBands', 'Sigma0_VH,Sigma0_VV')
+            decibel = GPF.createProduct("LinearToFromdB", parameters, product)
+            self.decibel_list.append(decibel)
+        self.temporary_data_list=self.decibel_list
+        print("Linear to/from dB Conversion is done")
+        return self.decibel_list
 
     def convert_to_polygon(self):
         from osgeo import ogr, osr
@@ -305,29 +342,25 @@ class sentinel1_lake_extraction(object):
             sourceRaster=None
 
 
-    def linear_to_dB(self):
-        self.decibel_list = []
-        for product in self.temporary_data_list:
-            parameters = snappy.HashMap()
-            parameters.put('sourceBands', 'Sigma0_VH,Sigma0_VV')
-            decibel = GPF.createProduct("LinearToFromdB", parameters, product)
-            self.decibel_list.append(decibel)
-        self.temporary_data_list=self.decibel_list
-        print("Linear to/from dB Conversion is done")
-        return self.decibel_list
 
 
     def run_to_writing(self):
 
-        self.traverse_data()
-        self.read_data()
-        self.terrain_correction()
-        self.geo_subset()
-        self.thermal_noise_removel()
-        self.calibration()
-        self.speckle_filter()
-        self.linear_to_dB()
-        self.write_product()
+        for i in self.traverse_data():
+            self.temporary_data = i
+            self.read_data()
+            self.terrain_correction()
+            self.geo_subset()
+            self.thermal_noise_removel()
+            self.calibration()
+            self.speckle_filter()
+            self.linear_to_dB()
+            self.write_product()
+            self.apply_threshold_to_product()
+            self.binary_filter()
+            self.write_tiff()
+            self.read_raster()
+            self.convert_to_polygon()
         print('Post processes of SAR Images is done!')
 
     def run_to_binarization_with_product(self):
@@ -336,6 +369,7 @@ class sentinel1_lake_extraction(object):
         self.write_tiff()
         self.read_raster()
         self.convert_to_polygon()
+
     @property
     def as_int(self):
         self.output_type = "int"
@@ -355,6 +389,6 @@ class sentinel1_lake_extraction(object):
 if __name__ == '__main__':
     sentinel1_lake_extraction_object = sentinel1_lake_extraction()
     sentinel1_lake_extraction_object.run_to_writing()
-    sentinel1_lake_extraction_object.run_to_binarization_with_product()
+    #sentinel1_lake_extraction_object.run_to_binarization_with_product()
     sentinel1_lake_extraction_object.end_time = datetime.datetime.now()
     print("Process time:  {}".format(str(sentinel1_lake_extraction_object.end_time - sentinel1_lake_extraction_object.start_time)))
